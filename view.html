@@ -1,0 +1,29 @@
+<h1>Тред {{.Title}}</h1>
+
+<p>[<a href="/edit/{{.Title}}">Ответить в тред</a>]</p>
+
+<div class="wrapper">
+        <button type="button" class="scroll_down" id="scroll_down"><a>Вниз</a></button>
+</div>
+<script>
+        (function() {
+
+                var btnScrollDown = document.querySelector('#scroll_down');
+
+                function scrollDown() {
+                        window.scrollTo(0,document.body.scrollHeight);
+                }
+
+                btnScrollDown.addEventListener('click', scrollDown);
+        })();
+</script>
+<ul>
+    {{range .Messages}}
+        <li>{{.}}</li>
+    {{end}}
+</ul>
+
+<p>[<a href="/edit/{{.Title}}">Ответить в тред</a>]</p>
+<p>[<a href="/view/{{.Title}}">Обновить</a>]</p>
+<div>Your Text</div>
+<div>Все предложения по разработке в /dev/</div>
