@@ -1,16 +1,16 @@
 package main
 
 import (
-	"bufio"
 	"crypto/hmac"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
+	_ "github.com/go-sql-driver/mysql"
 	"html/template"
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -41,9 +41,44 @@ type Page struct {
 	Messages []string
 }
 
+var DBLOGIN = "dbuser"
+var DBPASSWORD = "dbpassword"
+var DBNAME = "test"
+
+type message struct {
+	Id      int
+	Message string
+}
+
+func createAndOpen(name string) *sql.DB {
+
+	db, err := sql.Open("mysql", DBLOGIN+":"+DBPASSWORD+"@tcp(127.0.0.1:3306)/"+DBNAME)
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS " + name + " (`id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY, `message` varchar(1024) NOT NULL)")
+	if err != nil {
+		panic(err)
+	}
+	db.Close()
+
+	db, err = sql.Open("mysql", DBLOGIN+":"+DBPASSWORD+"@tcp(127.0.0.1:3306)/"+DBNAME)
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+	return db
+}
+
 func (p *Page) save(w http.ResponseWriter, r *http.Request) error {
-	filename := p.Title + ".txt"
-	filename1, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	db, err := sql.Open("mysql", DBLOGIN+":"+DBPASSWORD+"@tcp(127.0.0.1:3306)/"+DBNAME)
+	defer db.Close()
+	if err != nil {
+		panic(err)
+	}
+	createAndOpen(p.Title)
 	if err != nil {
 		panic(err)
 	}
@@ -53,16 +88,15 @@ func (p *Page) save(w http.ResponseWriter, r *http.Request) error {
 	h.Write([]byte(str))
 	str = hex.EncodeToString(h.Sum(nil))[0:6]
 	message := string(p.Body)
-	fmt.Println(strings.Replace(message,"\n","",-1))
+	fmt.Println("Message: " + strings.Replace(message, "\n", "", -1))
 	currentTime := time.Now()
-	filename1.WriteString(str + ": " + strings.Replace(message,"\n","",-1)+" ("+currentTime.Format("2006-01-02 15:04:05 Monday")+")"+"\n")
 
-
+	_, err = db.Exec("INSERT INTO " + p.Title + "(message) VALUES (" + "'" + str + ": " + strings.Replace(message, "\n", "", -1) + " (" + currentTime.Format("2006-01-02 15:04:05 Monday"+")"+"'") + ")")
 	return nil
 }
 
 func loadPage(title string, w http.ResponseWriter, r *http.Request) (*Page, error) {
-	filename := title + ".txt"
+	//filename := title + ".txt"
 	//b, err := ioutil.ReadFile(filename)
 	/*if err != nil {
 		return nil, err
@@ -70,22 +104,26 @@ func loadPage(title string, w http.ResponseWriter, r *http.Request) (*Page, erro
 	//body := ""
 
 	var messages []string
-
-	file, err := os.Open(filename)
+	createAndOpen(title)
+	db, err := sql.Open("mysql", DBLOGIN+":"+DBPASSWORD+"@tcp(127.0.0.1:3306)/"+DBNAME)
+	defer db.Close()
 	if err != nil {
-		file, err = os.Create(filename)
-		log.Panic(err)
-
+		panic(err)
 	}
-	defer file.Close()
+	res, err := db.Query("SELECT * FROM " + title)
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-
-		message := scanner.Text()
-		messages = append(messages, message)
+	if err != nil {
+		panic(err)
 	}
 
+	for res.Next() {
+		var msg message
+		err := res.Scan(&msg.Id, &msg.Message)
+		if err != nil {
+			panic(err)
+		}
+		messages = append(messages, msg.Message)
+	}
 	return &Page{Title: title, Messages: messages}, nil
 }
 
@@ -113,7 +151,7 @@ func editHandler(w http.ResponseWriter, r *http.Request, title string) {
 func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
 	body := r.FormValue("body")
 	p := &Page{Title: title, Body: []byte(body)}
-	err := p.save(w,r)
+	err := p.save(w, r)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -146,6 +184,11 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.Handl
 }
 
 func main() {
+	db, err := sql.Open("mysql", DBLOGIN+":"+DBPASSWORD+"@tcp(127.0.0.1:3306)/"+DBNAME)
+	defer db.Close()
+	if err != nil {
+		panic(err)
+	}
 	http.HandleFunc("/view/", makeHandler(viewHandler))
 	http.HandleFunc("/edit/", makeHandler(editHandler))
 	http.HandleFunc("/save/", makeHandler(saveHandler))
