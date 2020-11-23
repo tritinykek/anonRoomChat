@@ -58,9 +58,9 @@ func createAndOpen(name string) *sql.DB {
 	}
 	defer db.Close()
 
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS " + name + " (`id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY, `message` varchar(1024) NOT NULL)")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS " + strings.Replace(name,";","",-1) + " (`id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY, `message` varchar(1024) NOT NULL)")
 	if err != nil {
-		panic(err)
+		print(err)
 	}
 	db.Close()
 
@@ -76,11 +76,11 @@ func (p *Page) save(w http.ResponseWriter, r *http.Request) error {
 	db, err := sql.Open("mysql", DBLOGIN+":"+DBPASSWORD+"@tcp(127.0.0.1:3306)/"+DBNAME)
 	defer db.Close()
 	if err != nil {
-		panic(err)
+		print(err)
 	}
 	createAndOpen(p.Title)
 	if err != nil {
-		panic(err)
+		print(err)
 	}
 	key := "1234"
 	str := getIP(w, r)
@@ -91,7 +91,7 @@ func (p *Page) save(w http.ResponseWriter, r *http.Request) error {
 	fmt.Println("Message: " + strings.Replace(message, "\n", "", -1))
 	currentTime := time.Now()
 
-	_, err = db.Exec("INSERT INTO " + p.Title + "(message) VALUES (" + "'" + str + ": " + strings.Replace(message, "\n", "", -1) + " (" + currentTime.Format("2006-01-02 15:04:05 Monday"+")"+"'") + ")")
+	_, err = db.Exec("INSERT INTO " + p.Title + "(message) VALUES (" + "'" + str + ": " + strings.Replace(strings.Replace(message, "'", "", -1), "\n", "", -1) + " (" + currentTime.Format("2006-01-02 15:04:05 Monday"+")"+"'") + ")")
 	return nil
 }
 
@@ -113,7 +113,7 @@ func loadPage(title string, w http.ResponseWriter, r *http.Request) (*Page, erro
 	res, err := db.Query("SELECT * FROM " + title)
 
 	if err != nil {
-		panic(err)
+		print(err)
 	}
 
 	for res.Next() {
